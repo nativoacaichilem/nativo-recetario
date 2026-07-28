@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<!--
+  RECETARIO NATIVO AÇAÍ — diagnóstico
+  Abrí este archivo y apretá "Correr diagnóstico".
+  Prueba una por una las piezas que necesita el recetario y dice cuál falla.
+  Se puede borrar del repo una vez que todo funcione.
+-->
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagnóstico · Recetario nativo açaí</title>
+<style>
+:root{--porcelain:#F4F1F6;--paper:#fff;--grape:#2A1633;--pulp:#5B2A82;--palm:#2E7D5B;--rojo:#C2334D;
+  --maracuya:#F0A33C;--line:rgba(42,22,51,.13);--m:ui-monospace,'SF Mono',Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--porcelain);color:var(--grape);padding:32px 24px 60px;
+  font-family:'Inter Tight',system-ui,-apple-system,sans-serif;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:26px;letter-spacing:-.03em;margin:0 0 4px}
+p.s{color:rgba(42,22,51,.5);margin:0 0 24px}
+button{font:inherit;border:0;cursor:pointer;background:var(--pulp);color:#fff;padding:13px 26px;
+  border-radius:11px;font-weight:650}
+button:hover{background:#3D1A59} button:disabled{opacity:.5;cursor:default}
+.paso{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;
+  display:grid;grid-template-columns:30px 1fr;gap:14px;align-items:start}
+.ic{width:26px;height:26px;border-radius:99px;display:grid;place-items:center;font-weight:700;font-size:14px;
+  background:rgba(42,22,51,.1);color:rgba(42,22,51,.45)}
+.paso.ok  .ic{background:var(--palm);color:#fff}
+.paso.mal .ic{background:var(--rojo);color:#fff}
+.paso.dud .ic{background:var(--maracuya);color:#fff}
+.paso b{display:block;font-size:15.5px}
+.paso .det{font-family:var(--m);font-size:12.5px;color:rgba(42,22,51,.6);margin-top:6px;
+  white-space:pre-wrap;word-break:break-word;background:var(--porcelain);padding:9px 11px;border-radius:8px}
+.paso.mal .det{background:#FDECEF;color:#8E1F33}
+.res{margin-top:22px;padding:18px 20px;border-radius:14px;font-size:15.5px;display:none}
+.res.ok{display:block;background:#E8F5EE;border:1px solid #B8DFC9;color:#1B5E3A}
+.res.mal{display:block;background:#FDECEF;border:1px solid #F5CBD3;color:#8E1F33}
+.res b{display:block;margin-bottom:6px}
+img.prueba{margin-top:10px;max-width:120px;border-radius:8px;border:1px solid var(--line);display:block}
+.origen{font-family:var(--m);font-size:12px;color:rgba(42,22,51,.5);margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Diagnóstico del recetario</h1>
+  <p class="s">Prueba una por una las piezas que necesita funcionar. No modifica nada: lo que crea, lo borra.</p>
+  <button id="correr">Correr diagnóstico</button>
+  <div id="pasos"></div>
+  <div class="res" id="res"></div>
+  <p class="origen" id="origen"></p>
+</div>
+
+<script>
+/* ── los mismos datos que en recetario.html ── */
+const CONFIG = {
+  SUPABASE_URL : 'https://nmqyneadbtmwhmlkarcy.supabase.co',
+  SUPABASE_ANON: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcXluZWFkYnRtd2htbGthcmN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyNDczMzMsImV4cCI6MjEwMDgyMzMzM30.Zqd70QKgESXJSSvPv5FKW2QMpBeqKrnDmyNsBJB4yYU'
+};
+
+const $ = s => document.querySelector(s);
+const H = extra => Object.assign({ apikey:CONFIG.SUPABASE_ANON, Authorization:'Bearer ' + CONFIG.SUPABASE_ANON }, extra || {});
+let fallas = 0;
+
+$('#origen').textContent = 'Abierto desde: ' + (location.origin === 'null' ? 'archivo local (file://)' : location.origin);
+
+function paso(titulo){
+  const d = document.createElement('div');
+  d.className = 'paso';
+  d.innerHTML = `<div class="ic">…</div><div><b>${titulo}</b><div class="det" style="display:none"></div></div>`;
+  $('#pasos').appendChild(d);
+  return {
+    ok:  (t) => { d.className = 'paso ok';  d.querySelector('.ic').textContent = '✓'; if (t) det(d, t) },
+    mal: (t) => { d.className = 'paso mal'; d.querySelector('.ic').textContent = '✕'; fallas++; if (t) det(d, t) },
+    dud: (t) => { d.className = 'paso dud'; d.querySelector('.ic').textContent = '!'; if (t) det(d, t) },
+    nodo: d
+  };
+}
+function det(d, t){ const e = d.querySelector('.det'); e.style.display = 'block'; e.textContent = t }
+
+async function correr(){
+  $('#correr').disabled = true;
+  $('#pasos').innerHTML = ''; $('#res').className = 'res'; fallas = 0;
+
+  /* 1. ¿El servidor del proyecto existe y responde? ---------- */
+  // Con mode:'no-cors' el navegador manda la petición pero no deja leer la
+  // respuesta. Si resuelve, el servidor está ahí. Si falla, no se llega.
+  const p1 = paso('1. El servidor del proyecto responde');
+  let alcanza = false;
+  try {
+    await fetch(CONFIG.SUPABASE_URL + '/rest/v1/', { mode:'no-cors', cache:'no-store' });
+    alcanza = true;
+    p1.ok('El dominio existe y contesta');
+  } catch(e){
+    p1.mal('No se llega a ' + CONFIG.SUPABASE_URL +
+      '\n\nEsto NO es problema del archivo local. Es una de estas tres:' +
+      '\n· el proyecto todavía se está creando (dice "Setting up project")' +
+      '\n· el proyecto está pausado' +
+      '\n· la URL no corresponde a un proyecto que exista' +
+      '\n\nProbá pegar esta dirección en una pestaña nueva:\n' + CONFIG.SUPABASE_URL + '/rest/v1/');
+  }
+
+  /* 2. ¿El navegador deja hablar con la API? ------------------ */
+  const p2 = paso('2. El navegador permite la llamada (CORS)');
+  if (!alcanza){
+    p2.dud('No se probó, porque el paso 1 falló.');
+    return terminar();
+  }
+  try {
+    const r = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/', { headers:H() });
+    p2.ok('Permitida. Respondió HTTP ' + r.status);
+  } catch(e){
+    p2.mal('El servidor está ahí, pero el navegador bloqueó la respuesta: ' + e.message +
+      (location.protocol === 'file:'
+        ? '\n\nEs porque abriste el archivo con doble clic (file://). Desde ahí varios navegadores no dejan hablar con servidores externos.' +
+          '\nSolución: subilo a GitHub Pages y probá desde la URL real. Ahí funciona.'
+        : '\n\nRevisá en Supabase → Settings → API si hay restricción de dominios.'));
+    return terminar();
+  }
+
+  /* 3. ¿Existe la tabla y se puede leer? --------------------- */
+  const p3t = paso('3. Leer la tabla "recetario"');
+  try {
+    const r = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/recetario?select=id&limit=1', { headers:H() });
+    const txt = await r.text();
+    if (r.ok) p3t.ok('Tabla encontrada. Filas leídas: ' + (JSON.parse(txt || '[]').length));
+    else p3t.mal('HTTP ' + r.status + '\n' + txt.slice(0,300) +
+      '\n\nSi dice que no existe la relación "recetario", el SQL no se corrió completo.');
+  } catch(e){ p3t.mal(e.message) }
+
+  /* 3. ¿Se puede escribir? ----------------------------------- */
+  const p3 = paso('4. Crear y borrar una fila de prueba');
+  let idPrueba = null;
+  try {
+    const r = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/recetario', {
+      method:'POST',
+      headers:H({ 'Content-Type':'application/json', Prefer:'return=representation' }),
+      body: JSON.stringify({ nombre:'__prueba diagnóstico__', activo:false, preparacion:'borrar' })
+    });
+    const txt = await r.text();
+    if (!r.ok) throw new Error('HTTP ' + r.status + '\n' + txt.slice(0,300));
+    idPrueba = (JSON.parse(txt)[0] || {}).id;
+    const d = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/recetario?id=eq.' + idPrueba, { method:'DELETE', headers:H() });
+    if (d.ok) p3.ok('Escritura y borrado funcionan');
+    else p3.dud('Se pudo crear pero no borrar (HTTP ' + d.status + ').\nBorra a mano la fila "__prueba diagnóstico__" en el Table Editor.');
+  } catch(e){
+    p3.mal(e.message + '\n\nSi habla de "row-level security", falta la política del paso 2 del SQL.');
+  }
+
+  /* 4. ¿Se puede subir una imagen? --------------------------- */
+  const p4 = paso('5. Subir una imagen al bucket "recetario"');
+  const ruta = 'diagnostico/prueba-' + Date.now() + '.png';
+  const destino = CONFIG.SUPABASE_URL + '/storage/v1/object/recetario/' + ruta;
+  let publica = null, metodo = null;
+  try {
+    // imagen mínima generada acá mismo
+    const c = document.createElement('canvas'); c.width = c.height = 48;
+    const x = c.getContext('2d');
+    x.fillStyle = '#5B2A82'; x.fillRect(0,0,48,48);
+    x.fillStyle = '#F0A33C'; x.fillRect(12,12,24,24);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('el navegador no pudo generar la imagen de prueba (canvas)');
+
+    const fd = new FormData();
+    fd.append('cacheControl', '3600');
+    fd.append('', blob, 'prueba.png');
+    let r = await fetch(destino, { method:'POST', headers:H({ 'x-upsert':'true' }), body:fd });
+    let e1 = null;
+    if (r.ok) metodo = 'multipart/form-data';
+    else {
+      e1 = 'HTTP ' + r.status + ' ' + (await r.text()).slice(0,200);
+      r = await fetch(destino, { method:'POST', headers:H({ 'Content-Type':'image/png', 'x-upsert':'true' }), body:blob });
+      if (r.ok) metodo = 'cuerpo binario';
+      else throw new Error('multipart → ' + e1 + '\nbinario  → HTTP ' + r.status + ' ' + (await r.text()).slice(0,200));
+    }
+    publica = CONFIG.SUPABASE_URL + '/storage/v1/object/public/recetario/' + ruta;
+    p4.ok('Subida correcta usando ' + metodo);
+  } catch(e){
+    p4.mal(e.message +
+      '\n\nSi dice "Bucket not found", falta el paso 3 del SQL.' +
+      '\nSi habla de "policy" o "Unauthorized", falta la política del bucket.');
+  }
+
+  /* 5. ¿La imagen queda pública? ----------------------------- */
+  const p5 = paso('6. Ver la imagen desde afuera (bucket público)');
+  if (!publica) p5.dud('No se probó, porque el paso 5 falló.');
+  else {
+    try {
+      const r = await fetch(publica, { cache:'no-store' });
+      if (r.ok){
+        p5.ok('La imagen se lee sin credenciales. Así la van a ver los iPad.');
+        const img = document.createElement('img');
+        img.className = 'prueba'; img.src = publica; img.alt = 'imagen de prueba';
+        p5.nodo.querySelector('div:last-child').appendChild(img);
+      } else {
+        p5.mal('HTTP ' + r.status + '\nEl bucket no está marcado como público. Corré de nuevo el paso 3 del SQL.');
+      }
+    } catch(e){ p5.mal(e.message) }
+    // limpieza
+    try { await fetch(destino, { method:'DELETE', headers:H() }) } catch(e){}
+  }
+
+  terminar();
+}
+
+function terminar(){
+  const r = $('#res');
+  if (fallas === 0){
+    r.className = 'res ok';
+    r.innerHTML = '<b>Todo funciona.</b>Podés subir fotos sin problema. Si igual falla en el panel, avisame qué dice el mensaje rojo.';
+  } else {
+    r.className = 'res mal';
+    r.innerHTML = '<b>' + fallas + (fallas === 1 ? ' paso falló.' : ' pasos fallaron.') +
+      '</b>Copiame el texto del recuadro rojo y lo arreglamos.';
+  }
+  $('#correr').disabled = false;
+  $('#correr').textContent = 'Correr de nuevo';
+}
+
+$('#correr').addEventListener('click', correr);
+</script>
+</body>
+</html>
