@@ -109,7 +109,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
   border-radius:999px;background:var(--paper);border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .12s}
 .volver:active{transform:scale(.96)}
 .btn{display:inline-flex;align-items:center;gap:9px;font-weight:650;font-size:15px;padding:12px 22px;
-  border-radius:999px;background:var(--pulp);color:#fff;transition:transform .12s;margin-left:auto}
+  border-radius:999px;background:var(--pulp);color:#fff;transition:transform .12s;margin-left:auto;
+  text-decoration:none;-webkit-touch-callout:none}
 .btn:active{transform:scale(.96)}
 
 .fbody{max-width:820px;margin:0 auto;padding:30px 24px calc(70px + env(safe-area-inset-bottom))}
@@ -144,16 +145,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .cuerpo ul.puntos li i{width:7px;height:7px;border-radius:99px;background:var(--maracuya);margin-top:12px}
 .cuerpo .sin{color:var(--grape-45)}
 
-/* video */
-.vmodal{position:fixed;inset:0;z-index:70;background:rgba(20,10,26,.94);display:none;place-items:center;padding:24px}
-.vmodal.abierta{display:grid}
-.vwrap{width:100%;max-width:1000px}
-.vwrap .caja{aspect-ratio:16/9;background:#000;border-radius:16px;overflow:hidden}
-.vwrap iframe,.vwrap video{width:100%;height:100%;border:0;display:block}
-.vwrap .pie{display:flex;align-items:center;gap:14px;margin-top:14px;color:#fff}
-.vwrap .pie b{font-family:var(--d);font-weight:700;letter-spacing:-.02em}
-.vwrap .pie a{color:rgba(255,255,255,.6);font-size:14px;text-decoration:none}
-.vwrap .pie button{margin-left:auto;background:rgba(255,255,255,.14);padding:11px 20px;border-radius:999px;font-weight:600}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -195,14 +186,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
   </div>
   <div class="fbody" id="fbody"></div>
 </section>
-
-<div class="vmodal" id="vmodal">
-  <div class="vwrap">
-    <div class="caja" id="vcaja"></div>
-    <div class="pie"><b id="vtitulo"></b><a id="vlink" href="#" target="_blank" rel="noopener">Abrir aparte</a>
-      <button id="vcerrar">Cerrar</button></div>
-  </div>
-</div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
@@ -336,7 +319,11 @@ function abrir(id){
   actual = r;
 
   $('#fbarDer').innerHTML = r.video_url
-    ? `<button class="btn" id="verVideo"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>Ver video</button>` : '';
+    ? `<a class="btn" href="${esc(r.video_url)}" target="_blank" rel="noopener">
+         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+         ${esc(etiquetaVideo(r.video_url))}
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.65"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+       </a>` : '';
 
   $('#fbody').innerHTML = `
     <div class="enc">
@@ -353,34 +340,19 @@ function abrir(id){
 
   const f = $('#ficha'); f.classList.add('abierta'); f.setAttribute('aria-hidden','false'); f.scrollTop = 0;
   document.body.style.overflow = 'hidden';
-  const bv = $('#verVideo'); if (bv) bv.onclick = () => abrirVideo(r);
 }
 function cerrarFicha(){
   const f = $('#ficha'); f.classList.remove('abierta'); f.setAttribute('aria-hidden','true');
   document.body.style.overflow = ''; actual = null;
 }
 
-/* ── video ───────────────────────────────────────────── */
-function embed(u){
-  const s = String(u || '').trim();
-  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{6,})/);
-  if (m) return { tipo:'iframe', src:`https://www.youtube-nocookie.com/embed/${m[1]}?rel=0&playsinline=1` };
-  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (m) return { tipo:'iframe', src:`https://player.vimeo.com/video/${m[1]}` };
-  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(s)) return { tipo:'video', src:s };
-  return { tipo:'link', src:s };
+/* ── video: se abre en la app o el sitio del video, no acá ── */
+function etiquetaVideo(u){
+  const s = String(u || '');
+  if (/youtube\.com|youtu\.be/i.test(s)) return 'Ver en YouTube';
+  if (/vimeo\.com/i.test(s))              return 'Ver en Vimeo';
+  return 'Ver video';
 }
-function abrirVideo(r){
-  const e = embed(r.video_url);
-  $('#vtitulo').textContent = r.nombre;
-  $('#vlink').href = r.video_url;
-  $('#vcaja').innerHTML =
-    e.tipo === 'iframe' ? `<iframe src="${esc(e.src)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>` :
-    e.tipo === 'video'  ? `<video src="${esc(e.src)}" controls playsinline preload="metadata"></video>` :
-    `<div style="display:grid;place-items:center;height:100%;color:#fff;font-size:15px;opacity:.75;text-align:center;padding:24px">Este enlace no se puede reproducir acá.<br>Ábrelo aparte.</div>`;
-  $('#vmodal').classList.add('abierta');
-}
-function cerrarVideo(){ $('#vmodal').classList.remove('abierta'); $('#vcaja').innerHTML = '' }
 
 /* ── eventos ─────────────────────────────────────────── */
 $('#rail').addEventListener('click', e => {
@@ -393,12 +365,8 @@ $('#grid').addEventListener('click', e => {
 $('#q').addEventListener('input', e => { busqueda = e.target.value; pintar() });
 $('#sync').addEventListener('click', () => cargar(true));
 $('#cerrarFicha').addEventListener('click', cerrarFicha);
-$('#vcerrar').addEventListener('click', cerrarVideo);
-$('#vmodal').addEventListener('click', e => { if (e.target.id === 'vmodal') cerrarVideo() });
 document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  if ($('#vmodal').classList.contains('abierta')) return cerrarVideo();
-  if ($('#ficha').classList.contains('abierta')) cerrarFicha();
+  if (e.key === 'Escape' && $('#ficha').classList.contains('abierta')) cerrarFicha();
 });
 
 /* ── arranque ────────────────────────────────────────── */
