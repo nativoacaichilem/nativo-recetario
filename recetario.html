@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<!--
+  RECETARIO NATIVO AÇAÍ — visor para los iPad de los locales
+  archivo : recetario.html          (esta pantalla, solo lectura)
+  panel   : recetario-admin.html    (donde se crean y editan los productos)
+  base    : tabla "recetario" + bucket "recetario" en Supabase
+  sql     : recetario-supabase.sql
+-->
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recetario">
+<meta name="theme-color" content="#F4F1F6">
+<title>Recetario · nativo açaí</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --porcelain:#F4F1F6; --paper:#fff;
+  --grape:#2A1633; --grape-70:rgba(42,22,51,.70); --grape-45:rgba(42,22,51,.45);
+  --pulp:#5B2A82; --pulp-soft:#EDE3F5; --pulp-deep:#3D1A59;
+  --maracuya:#F0A33C;
+  --line:rgba(42,22,51,.11); --line-2:rgba(42,22,51,.06);
+  --shadow:0 1px 2px rgba(42,22,51,.05), 0 10px 30px -12px rgba(42,22,51,.18);
+  --d:'Bricolage Grotesque',system-ui,sans-serif;
+  --b:'Inter Tight',system-ui,-apple-system,sans-serif;
+  --m:ui-monospace,'SF Mono',Menlo,monospace;
+  --r:20px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--porcelain);color:var(--grape);font-family:var(--b);font-size:16px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;overscroll-behavior-y:contain}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+:focus-visible{outline:2.5px solid var(--maracuya);outline-offset:3px;border-radius:6px}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;
+  padding:calc(14px + env(safe-area-inset-top)) 24px 14px;
+  background:rgba(244,241,246,.87);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand .mark{width:32px;height:32px;flex:none}
+.brand b{display:block;font-family:var(--d);font-weight:800;font-size:18px;letter-spacing:-.03em;line-height:1.1}
+.brand span{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grape-45);font-weight:700}
+.tools{margin-left:auto;display:flex;align-items:center;gap:10px}
+.search{display:flex;align-items:center;gap:9px;background:var(--paper);border:1px solid var(--line);
+  border-radius:999px;padding:9px 16px;box-shadow:var(--shadow);transition:border-color .15s}
+.search:focus-within{border-color:var(--pulp)}
+.search svg{flex:none;opacity:.4}
+.search input{border:0;background:none;outline:none;font:inherit;width:170px;user-select:text;-webkit-user-select:text}
+@media (max-width:700px){
+  .top{gap:10px;padding:calc(10px + env(safe-area-inset-top)) 13px 10px}
+  .brand .mark{width:27px;height:27px}
+  .brand b{font-size:15.5px}
+  .brand span{display:none}
+  .search{padding:8px 12px;flex:1}
+  .search input{width:100%;min-width:0;font-size:15px}
+  .iconbtn{width:37px;height:37px}
+  .rail{padding:11px 13px 2px;gap:6px}
+  .chip{padding:7px 13px;font-size:13.5px}
+}
+.iconbtn{width:42px;height:42px;border-radius:999px;background:var(--paper);border:1px solid var(--line);
+  display:grid;place-items:center;box-shadow:var(--shadow);transition:transform .12s}
+.iconbtn:active{transform:scale(.94)}
+.iconbtn.girando svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* categorías */
+.rail{display:flex;gap:8px;padding:16px 24px 4px;overflow-x:auto;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;padding:9px 17px;border-radius:999px;font-size:14.5px;font-weight:600;
+  border:1px solid var(--line);background:var(--paper);color:var(--grape-70);transition:.15s}
+.chip[aria-pressed=true]{background:var(--pulp);border-color:var(--pulp);color:#fff}
+.chip .n{font-family:var(--m);font-size:11.5px;opacity:.55;margin-left:6px}
+
+/* grilla */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;
+  padding:18px 24px calc(48px + env(safe-area-inset-bottom))}
+/* celular: se mantienen 3 columnas pero todo más compacto, para que
+   entren el triple de productos sin dejar de ser tocable */
+@media (max-width:700px){
+  .grid{gap:9px;padding:12px 13px calc(30px + env(safe-area-inset-bottom))}
+}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+  box-shadow:var(--shadow);text-align:left;display:flex;flex-direction:column;
+  transition:transform .16s cubic-bezier(.2,.9,.3,1), box-shadow .16s}
+.card:active{transform:scale(.975)}
+@media (hover:hover){.card:hover{box-shadow:0 2px 4px rgba(42,22,51,.06),0 18px 40px -14px rgba(42,22,51,.28)}}
+.card .foto{aspect-ratio:1;background:var(--pulp-soft);position:relative;overflow:hidden}
+.card .foto img{width:100%;height:100%;object-fit:cover;display:block}
+.card .foto .ph{position:absolute;inset:0;display:grid;place-items:center;opacity:.3}
+.card .cat{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.94);color:var(--pulp-deep);
+  font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:999px}
+.card .play{position:absolute;right:10px;top:10px;width:26px;height:26px;border-radius:999px;
+  background:rgba(255,255,255,.94);display:grid;place-items:center;color:var(--pulp)}
+.card .meta{padding:12px 14px 14px}
+.card h3{font-family:var(--d);font-size:18px;font-weight:700;letter-spacing:-.025em;margin:0;line-height:1.2;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:700px){
+  .card{border-radius:13px}
+  .card .meta{padding:7px 8px 9px}
+  .card h3{font-size:13px;line-height:1.22;letter-spacing:-.02em}
+  .card .cat{display:none}                    /* a ese tamaño no se lee; el filtro de arriba cumple */
+  .card .play{width:21px;height:21px;right:6px;top:6px}
+}
+
+/* estados */
+.estado{margin:8px 24px;padding:14px 18px;border-radius:14px;font-size:14.5px;display:flex;gap:10px;align-items:center;
+  background:#FDF3E3;color:#7A4A08;border:1px solid #F3DFB8}
+.vacio{padding:90px 24px;text-align:center;max-width:440px;margin:0 auto}
+.vacio h2{font-family:var(--d);font-size:26px;letter-spacing:-.03em;margin:0 0 8px}
+.vacio p{color:var(--grape-45);margin:0}
+.skel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.skel .a{aspect-ratio:1;background:linear-gradient(100deg,#EFE9F3 30%,#F7F3F9 50%,#EFE9F3 70%);
+  background-size:220% 100%;animation:sh 1.4s infinite}
+.skel .b{height:50px}
+@media (max-width:700px){.skel{border-radius:13px}.skel .b{height:34px}}
+@keyframes sh{to{background-position:-120% 0}}
+
+/* ficha */
+.ficha{position:fixed;inset:0;z-index:40;background:var(--porcelain);overflow-y:auto;
+  transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.9,.25,1);-webkit-overflow-scrolling:touch}
+.ficha.abierta{transform:none}
+.fbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;
+  padding:calc(14px + env(safe-area-inset-top)) 24px 14px;
+  background:rgba(244,241,246,.9);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.volver{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;padding:10px 18px 10px 13px;
+  border-radius:999px;background:var(--paper);border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .12s}
+.volver:active{transform:scale(.96)}
+.btn{display:inline-flex;align-items:center;gap:9px;font-weight:650;font-size:15px;padding:12px 22px;
+  border-radius:999px;background:var(--pulp);color:#fff;transition:transform .12s;margin-left:auto;
+  text-decoration:none;-webkit-touch-callout:none}
+.btn:active{transform:scale(.96)}
+
+.fbody{max-width:820px;margin:0 auto;padding:30px 24px calc(70px + env(safe-area-inset-bottom))}
+@media (max-width:700px){
+  .fbar{padding:calc(10px + env(safe-area-inset-top)) 13px 10px;gap:9px}
+  .volver{padding:9px 15px 9px 11px;font-size:14px}
+  .btn{padding:10px 16px;font-size:14px}
+  .fbody{padding:20px 16px calc(48px + env(safe-area-inset-bottom))}
+}
+.enc{display:flex;gap:24px;align-items:flex-start}
+@media (max-width:600px){.enc{gap:16px}}
+.enc .mini{width:136px;height:136px;flex:none;border-radius:16px;overflow:hidden;background:var(--pulp-soft);
+  box-shadow:var(--shadow);display:grid;place-items:center}
+@media (max-width:700px){.enc .mini{width:84px;height:84px;border-radius:12px}}
+.enc .mini img{width:100%;height:100%;object-fit:cover;display:block}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--pulp);margin:0 0 8px}
+.enc h1{font-family:var(--d);font-size:clamp(30px,5.4vw,50px);font-weight:800;letter-spacing:-.04em;line-height:1.02;margin:0}
+
+.prep{margin-top:38px;border-top:1px solid var(--line);padding-top:8px}
+.prep > .rot{font-family:var(--d);font-size:12.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--grape-45);margin:14px 0 18px}
+/* texto renderizado */
+.cuerpo{font-size:19px;line-height:1.6}
+@media (max-width:600px){.cuerpo{font-size:17.5px}}
+.cuerpo p{margin:0 0 14px}
+.cuerpo strong{font-weight:700;color:var(--pulp-deep)}
+.cuerpo h3.sec{font-family:var(--d);font-size:15px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--pulp);margin:30px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.cuerpo h3.sec:first-child{margin-top:0}
+.cuerpo ol.pasos{list-style:none;padding:0;margin:0 0 16px}
+.cuerpo ol.pasos li{display:grid;grid-template-columns:46px minmax(0,1fr);gap:16px;
+  padding:14px 0;border-top:1px solid var(--line-2)}
+.cuerpo ol.pasos li:first-child{border-top:0;padding-top:4px}
+.cuerpo ol.pasos .n{font-family:var(--d);font-size:27px;font-weight:800;letter-spacing:-.05em;color:var(--pulp);
+  line-height:1.1;font-variant-numeric:tabular-nums}
+.cuerpo ul.puntos{list-style:none;padding:0;margin:0 0 16px}
+.cuerpo ul.puntos li{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;padding:5px 0}
+.cuerpo ul.puntos li i{width:7px;height:7px;border-radius:99px;background:var(--maracuya);margin-top:12px}
+.cuerpo .sin{color:var(--grape-45)}
+
+/* extras de la categoría */
+.extras{margin-top:42px}
+.extras > .rot{font-family:var(--d);font-size:12.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--grape-45);margin:0 0 16px;padding-top:22px;border-top:1px solid var(--line)}
+.extra{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--maracuya);
+  border-radius:0 16px 16px 0;padding:20px 22px;margin-bottom:14px;box-shadow:var(--shadow)}
+.extra > h3{font-family:var(--d);font-size:22px;font-weight:700;letter-spacing:-.03em;margin:0 0 12px;color:var(--pulp-deep)}
+.extra .cuerpo{font-size:17.5px}
+.extra .cuerpo ol.pasos li{border-top-color:var(--line-2)}
+@media (max-width:700px){
+  .extras{margin-top:30px}
+  .extra{padding:15px 16px;border-radius:0 13px 13px 0}
+  .extra > h3{font-size:19px}
+  .extra .cuerpo{font-size:16px}
+}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <circle cx="15" cy="19" r="11" fill="#5B2A82"/>
+      <circle cx="11.5" cy="15.5" r="2.6" fill="#fff" opacity=".38"/>
+      <path d="M16.5 8.5C18.6 3.9 23.4 1.8 28.5 2.5c.6 4.9-1.4 9.4-6.2 11.2-2.4.9-4.5.4-5.8-.9-1.3-1.3-1.2-2.9 0-4.3Z" fill="#2E7D5B"/>
+      <path d="M17 13.5C19.4 10.3 23 8.4 27 8" stroke="#fff" stroke-width="1.3" stroke-linecap="round" opacity=".5"/>
+    </svg>
+    <div><b>nativo açaí</b><span>Recetario</span></div>
+  </div>
+  <div class="tools">
+    <label class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Buscar producto" autocomplete="off" enterkeyhint="search">
+    </label>
+    <button class="iconbtn" id="sync" aria-label="Actualizar recetario">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="aviso" class="estado" hidden></div>
+<nav class="rail" id="rail" aria-label="Categorías"></nav>
+<main class="grid" id="grid"></main>
+<div class="vacio" id="vacio" hidden></div>
+
+<section class="ficha" id="ficha" aria-hidden="true">
+  <div class="fbar">
+    <button class="volver" id="cerrarFicha">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Volver
+    </button>
+    <div id="fbarDer" style="margin-left:auto;display:flex"></div>
+  </div>
+  <div class="fbody" id="fbody"></div>
+</section>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURACIÓN — pega los datos de tu proyecto Supabase
+   (Settings → API: Project URL y la llave anon / public)
+   ═══════════════════════════════════════════════════════════ */
+const CONFIG = {
+  SUPABASE_URL : 'https://nmqyneadbtmwhmlkarcy.supabase.co',
+  SUPABASE_ANON: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcXluZWFkYnRtd2htbGthcmN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyNDczMzMsImV4cCI6MjEwMDgyMzMzM30.Zqd70QKgESXJSSvPv5FKW2QMpBeqKrnDmyNsBJB4yYU',
+  REFRESCO_MIN : 5          // cada cuántos minutos busca cambios
+};
+/* ═══════════════════════════════════════════════════════════ */
+
+const CACHE = 'nativo:recetario:cache2';   // con prefijo, para no chocar con las otras apps del mismo dominio
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let recetas = [], extras = [], catActiva = 'Todos', busqueda = '', actual = null;
+
+/* ── formato del texto de preparación ─────────────────
+   1. o 1)  → paso numerado (respeta el número escrito)
+   -  •  *  → viñeta
+   #        → subtítulo de sección
+   **algo** → negrita
+   ─────────────────────────────────────────────────────── */
+function formatear(txt){
+  const linea = s => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  let html = '', lista = null;
+  const cerrar = () => { if (lista){ html += lista === 'ol' ? '</ol>' : '</ul>'; lista = null } };
+
+  for (const cruda of String(txt || '').replace(/\r/g, '').split('\n')){
+    const l = cruda.trim();
+    if (!l){ cerrar(); continue }
+    let m;
+    if ((m = l.match(/^#{1,3}\s*(.+)$/))){
+      cerrar(); html += `<h3 class="sec">${linea(m[1])}</h3>`; continue;
+    }
+    if ((m = l.match(/^(\d{1,3})(?:\s*[.)]|-)\s+(.+)$/))){
+      if (lista !== 'ol'){ cerrar(); html += '<ol class="pasos">'; lista = 'ol' }
+      html += `<li><span class="n">${esc(m[1])}</span><div>${linea(m[2])}</div></li>`; continue;
+    }
+    if ((m = l.match(/^[-•*·–—]\s+(.+)$/))){
+      if (lista !== 'ul'){ cerrar(); html += '<ul class="puntos">'; lista = 'ul' }
+      html += `<li><i></i><div>${linea(m[1])}</div></li>`; continue;
+    }
+    cerrar(); html += `<p>${linea(l)}</p>`;
+  }
+  cerrar();
+  return html || '<p class="sin">Esta receta todavía no tiene la preparación escrita.</p>';
+}
+
+/* ── datos ───────────────────────────────────────────── */
+const guardar   = (d, e) => { try { localStorage.setItem(CACHE, JSON.stringify({d, e, t:Date.now()})) } catch(err){} };
+const leerCache = () => { try { return JSON.parse(localStorage.getItem(CACHE) || 'null') } catch(e){ return null } };
+
+async function cargar(manual){
+  const btn = $('#sync'); if (manual) btn.classList.add('girando');
+  const cab = { apikey:CONFIG.SUPABASE_ANON, Authorization:'Bearer ' + CONFIG.SUPABASE_ANON };
+  try{
+    const [rr, re] = await Promise.all([
+      fetch(CONFIG.SUPABASE_URL + '/rest/v1/recetario?select=*&activo=eq.true&order=orden.asc,nombre.asc',
+            { headers:cab, cache:'no-store' }),
+      fetch(CONFIG.SUPABASE_URL + '/rest/v1/recetario_extras?select=*&activo=eq.true&order=orden.asc',
+            { headers:cab, cache:'no-store' })
+    ]);
+    if (!rr.ok) throw new Error('HTTP ' + rr.status);
+    recetas = await rr.json();
+    extras  = re.ok ? await re.json() : [];   // si la tabla aún no existe, sigue sin extras
+    guardar(recetas, extras);
+    $('#aviso').hidden = true;
+    pintar();
+  }catch(err){
+    const c = leerCache();
+    if (c && c.d && c.d.length){
+      recetas = c.d; extras = c.e || []; pintar();
+      aviso('Sin conexión. Estás viendo la última versión guardada del ' +
+        new Date(c.t).toLocaleString('es-CL',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) + '.');
+    } else {
+      recetas = []; pintar();
+      aviso('No se pudo cargar el recetario. Revisa la conexión y toca el botón de actualizar.');
+    }
+  }finally{ setTimeout(() => btn.classList.remove('girando'), 500) }
+}
+function aviso(t){
+  const a = $('#aviso'); a.hidden = false;
+  a.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg><span>' + esc(t) + '</span>';
+}
+
+/* ── grilla ──────────────────────────────────────────── */
+function filtradas(){
+  const q = busqueda.trim().toLowerCase();
+  return recetas.filter(r => {
+    if (catActiva !== 'Todos' && (r.categoria || 'General') !== catActiva) return false;
+    if (!q) return true;
+    return (r.nombre + ' ' + (r.categoria || '') + ' ' + (r.preparacion || '')).toLowerCase().includes(q);
+  });
+}
+
+function pintar(){
+  const cuenta = {};
+  recetas.forEach(r => { const c = r.categoria || 'General'; cuenta[c] = (cuenta[c] || 0) + 1 });
+  const cats = ['Todos', ...Object.keys(cuenta).sort((a,b) => a.localeCompare(b,'es'))];
+  if (!cats.includes(catActiva)) catActiva = 'Todos';
+  const rail = $('#rail');
+  rail.innerHTML = cats.length > 2 ? cats.map(c =>
+    `<button class="chip" aria-pressed="${c === catActiva}" data-cat="${esc(c)}">${esc(c)}<span class="n">${c === 'Todos' ? recetas.length : cuenta[c]}</span></button>`).join('') : '';
+  rail.style.display = rail.innerHTML ? '' : 'none';
+
+  const lista = filtradas(), g = $('#grid'), v = $('#vacio');
+  if (!recetas.length){
+    g.innerHTML = ''; v.hidden = false;
+    v.innerHTML = '<h2>Todavía no hay recetas</h2><p>Entra al panel de administración para crear la primera y aparecerá acá al tiro.</p>';
+    return;
+  }
+  if (!lista.length){
+    g.innerHTML = ''; v.hidden = false;
+    v.innerHTML = '<h2>Sin resultados</h2><p>Ningún producto coincide con esa búsqueda. Prueba con otra palabra o vuelve a “Todos”.</p>';
+    return;
+  }
+  v.hidden = true;
+  g.innerHTML = lista.map(r => `
+    <button class="card" data-id="${esc(r.id)}">
+      <div class="foto">
+        ${r.imagen_url
+          ? `<img src="${esc(r.imagen_url)}" alt="" loading="lazy" decoding="async">`
+          : `<div class="ph"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#5B2A82" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-4 4 3 3-2 4 3"/></svg></div>`}
+        <span class="cat">${esc(r.categoria || 'General')}</span>
+        ${r.video_url ? '<span class="play" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>' : ''}
+      </div>
+      <div class="meta"><h3>${esc(r.nombre)}</h3></div>
+    </button>`).join('');
+}
+
+/* ── ficha ───────────────────────────────────────────── */
+function abrir(id){
+  const r = recetas.find(x => String(x.id) === String(id)); if (!r) return;
+  actual = r;
+
+  $('#fbarDer').innerHTML = r.video_url
+    ? `<a class="btn" href="${esc(r.video_url)}" target="_blank" rel="noopener">
+         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>
+         ${esc(etiquetaVideo(r.video_url))}
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.65"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+       </a>` : '';
+
+  $('#fbody').innerHTML = `
+    <div class="enc">
+      ${r.imagen_url ? `<div class="mini"><img src="${esc(r.imagen_url)}" alt="${esc(r.nombre)}"></div>` : ''}
+      <div style="min-width:0">
+        <p class="eyebrow">${esc(r.categoria || 'General')}</p>
+        <h1>${esc(r.nombre)}</h1>
+      </div>
+    </div>
+    <div class="prep">
+      <p class="rot">Preparación</p>
+      <div class="cuerpo">${formatear(r.preparacion)}</div>
+    </div>
+    ${extrasDe(r)}`;
+
+  const f = $('#ficha'); f.classList.add('abierta'); f.setAttribute('aria-hidden','false'); f.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}
+function cerrarFicha(){
+  const f = $('#ficha'); f.classList.remove('abierta'); f.setAttribute('aria-hidden','true');
+  document.body.style.overflow = ''; actual = null;
+}
+
+/* ── extras que aplican a la categoría del producto ── */
+function extrasDe(r){
+  const cat = r.categoria || 'General';
+  // primero los propios de la categoría, después los que aplican a todo
+  const mios = [
+    ...extras.filter(e => e.categoria === cat),
+    ...extras.filter(e => e.categoria === 'Todas')
+  ];
+  if (!mios.length) return '';
+  return `<div class="extras">
+    <p class="rot">${mios.length === 1 ? 'Extra' : 'Extras'} · ${esc(cat)}</p>
+    ${mios.map(e => `<div class="extra">
+        <h3>${esc(e.titulo)}</h3>
+        <div class="cuerpo">${formatear(e.indicaciones)}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+/* ── video: se abre en la app o el sitio del video, no acá ── */
+function etiquetaVideo(u){
+  const s = String(u || '');
+  if (/youtube\.com|youtu\.be/i.test(s)) return 'Ver en YouTube';
+  if (/vimeo\.com/i.test(s))              return 'Ver en Vimeo';
+  return 'Ver video';
+}
+
+/* ── eventos ─────────────────────────────────────────── */
+$('#rail').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  catActiva = c.dataset.cat; pintar(); window.scrollTo({ top:0, behavior:'smooth' });
+});
+$('#grid').addEventListener('click', e => {
+  const c = e.target.closest('.card'); if (c) abrir(c.dataset.id);
+});
+$('#q').addEventListener('input', e => { busqueda = e.target.value; pintar() });
+$('#sync').addEventListener('click', () => cargar(true));
+$('#cerrarFicha').addEventListener('click', cerrarFicha);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('#ficha').classList.contains('abierta')) cerrarFicha();
+});
+
+/* ── arranque ────────────────────────────────────────── */
+$('#grid').innerHTML = Array.from({length:6}, () => '<div class="skel"><div class="a"></div><div class="b"></div></div>').join('');
+const c0 = leerCache();
+if (c0 && c0.d && c0.d.length){ recetas = c0.d; extras = c0.e || []; pintar() }
+cargar();
+setInterval(() => { if (!document.hidden) cargar() }, Math.max(1, CONFIG.REFRESCO_MIN) * 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar() });
+</script>
+</body>
+</html>
